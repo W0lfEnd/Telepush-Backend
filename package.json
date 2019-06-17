@@ -1,0 +1,24 @@
+{
+  "name": "telepushapi",
+  "version": "1.0.0",
+  "description": "Web api for Telepush Messenger",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "oliinik.dev",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^1.19.0",
+    "express": "^4.17.1",
+    "firebase-admin": "^8.0.0",
+    "install": "^0.12.2",
+    "jsonwebtoken": "^8.5.1",
+    "mongodb": "^3.2.6",
+    "mongoose": "^5.5.12"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.0"
+  }
+}
