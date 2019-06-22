@@ -6,9 +6,10 @@ let VerifyToken = require(__root + 'middleware/auth/VerifyToken');
 router.use(bodyParser.urlencoded({ extended: true }));
 
 let User = require('./User');
+let Chat = require('../chat/Chat').Model;
 
 router.get('/contacts', VerifyToken, function (req, res) {
-    User.Collection.find({_id:{$in: global["currentUser"].contacts }},
+    User.Model.find({_id:{$in: global["currentUser"].contacts }},
         User.MainProjection,
         function (err, users) {
             if(err) {
@@ -22,33 +23,53 @@ router.get('/contacts', VerifyToken, function (req, res) {
 });
 
 router.post('/contacts', VerifyToken, function (req, res) {
-    if(!req.body.contact_id) return res.sendStatus(400);
-    User.Collection.findById(req.body.contact_id,User.MainProjection, function (err, docs) {
-        if(err) {
-            //console.log(err);
-            return res.sendStatus(404);
+    if(!req.body.user_id) return res.sendStatus(400);
+    //find current user
+    User.Model.findById(
+        global["currentUser"].id,
+        {},
+        function (err, currUser) {
+            //if contact already exist send http conflict
+            if(currUser.contacts.includes(req.body.user_id)) return res.sendStatus(409);
+            //else add new contact to array of contacts
+            currUser.contacts.push(req.body.user_id);
+            //save contact
+            currUser.save(function (err, success) {
+                if(err) {console.log(err); return res.sendStatus(500);}
+                //we need to create new private chat, so we try to find exist chat
+                Chat.findOne(
+                    {
+                        $and: [
+                            {users_id: currUser._id},
+                            {users_id: req.body.user_id},
+                            {is_private: true},
+                        ]
+                    },
+                    {_id:1, photo_url: 1, messages: {$slice: -1}, users_id: 1, is_private: 1},
+                    function (err, privateChat) {
+                        if(err) {console.log(err); return res.sendStatus(500);}
+                        //if chat exist we send it
+                        if(privateChat)
+                            return res.send(privateChat);
+                        //else we create new private then and then send it
+                        else{
+                            let newPrivateChat = new Chat({users_id:[currUser._id,req.body.user_id],is_private: true});
+                            newPrivateChat.save(function (err, newChat) {
+                                if(err) {console.log(err); return res.sendStatus(500);}
+                                return res.send(newChat);
+                            })
+                        }
+                    }
+                );
+            })
         }
-        if(!docs) return res.sendStatus(404);
-        User.Collection.findOneAndUpdate(
-            {_id: global['currentUser']._id},
-            {$addToSet: { contacts: req.body.contact_id}},
-            function (err, users) {
-                if(err) {
-                    console.log(err);
-                    return res.sendStatus(500);
-                }
-                console.log(users);
-                res.sendStatus(200);
-            }
-        );
-    });
-
+        )
 });
 
 router.delete('/contacts', VerifyToken, function (req, res) {
-    User.Collection.findOneAndUpdate(
+    User.Model.findOneAndUpdate(
         { _id: global['currentUser']._id },
-        { $pull: { contacts: req.body.contact_id} },
+        { $pull: { contacts: req.body.user_id} },
         function (err, users) {
             if(err) {
                 console.log(err);
@@ -60,12 +81,13 @@ router.delete('/contacts', VerifyToken, function (req, res) {
 });
 
 router.get('/users/search/:search_str', VerifyToken, function (req, res) {
-    User.Collection.find({
+    User.Model.find({
             "$or": [
                 {"name" : new RegExp(req.params.search_str, 'i')},
                 {"email" : new RegExp(req.params.search_str, 'i')}
             ]
-        },User.MainProjection,
+        },
+        User.MainProjection,
         function (err, users) {
             if(err){
                 console.log(err);

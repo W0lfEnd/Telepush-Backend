@@ -2,9 +2,9 @@ let mongoose = require('mongoose');
 let UserSchema = new mongoose.Schema({
     photo: {data: Buffer, contentType: String, default: ''},
     name: {type: String, required: true},
-    email: {type: String, index: true, required: true},
+    email: {type: String, index: true, required: true, unique: true},
     password: {type: String, required: true},
-    contacts: [{type: String, unique: true}],
+    contacts: [String],
     firebaseInstanceIds: [{instanceId: String, date: Date}],
     dateCreated: {type: Date, default: Date.now},
     sex: {type: Boolean, default: null}
@@ -17,10 +17,10 @@ let MainProjection = {
     sex: 1
 };
 mongoose.model('User', UserSchema);
-let Collection = mongoose.model('User');
+let Model = mongoose.model('User');
 module.exports = {
-    Collection: Collection,
+    Model: Model,
     MainProjection: MainProjection
 };
-//module.exports = Collection;
+//module.exports = Model;
 //module.exports.MainProjection = MainProjection;
