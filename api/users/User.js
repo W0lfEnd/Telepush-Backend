@@ -4,7 +4,7 @@ let UserSchema = new mongoose.Schema({
     name: {type: String, required: true},
     email: {type: String, index: true, required: true, unique: true},
     password: {type: String, required: true},
-    contacts: [String],
+    contacts: {type: [{user_id: String}], default: []},
     firebaseInstanceIds: [{instanceId: String, date: Date}],
     dateCreated: {type: Date, default: Date.now},
     sex: {type: Boolean, default: null}

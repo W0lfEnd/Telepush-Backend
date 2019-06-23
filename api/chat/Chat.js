@@ -1,12 +1,12 @@
 let mongoose = require('mongoose');
 let ChatSchema = new mongoose.Schema({
     photo_url: {data: Buffer, contentType: String, default: ''},
-    users_id: {type: [String], default: []},
+    users_id: {type: [{user_id:String}], default: []},
     messages: {
         type: [{
             sender_id: { type: String, index: true },
             message_text: String,
-            sending_date: { type: Date, index: true }
+            sending_date: { type: Date, index: true , default: Date.now}
         }], default: []
     },
     is_private: Boolean

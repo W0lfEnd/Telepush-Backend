@@ -9,7 +9,10 @@ let User = require('./User');
 let Chat = require('../chat/Chat').Model;
 
 router.get('/contacts', VerifyToken, function (req, res) {
-    User.Model.find({_id:{$in: global["currentUser"].contacts }},
+    let contacts_id = global["currentUser"].contacts.map(function (element) {
+        return element.user_id;
+    });
+    User.Model.find({_id:{$in: contacts_id }},
         User.MainProjection,
         function (err, users) {
             if(err) {
@@ -30,9 +33,11 @@ router.post('/contacts', VerifyToken, function (req, res) {
         {},
         function (err, currUser) {
             //if contact already exist send http conflict
-            if(currUser.contacts.includes(req.body.user_id)) return res.sendStatus(409);
+            currUser.contacts.forEach(function (element) {
+                if(element.user_id === req.body.user_id) res.sendStatus(409);
+            });
             //else add new contact to array of contacts
-            currUser.contacts.push(req.body.user_id);
+            currUser.contacts.push({user_id: req.body.user_id});
             //save contact
             currUser.save(function (err, success) {
                 if(err) {console.log(err); return res.sendStatus(500);}
@@ -40,8 +45,8 @@ router.post('/contacts', VerifyToken, function (req, res) {
                 Chat.findOne(
                     {
                         $and: [
-                            {users_id: currUser._id},
-                            {users_id: req.body.user_id},
+                            {"users_id.user_id": currUser._id.toString()},
+                            {"users_id.user_id": req.body.user_id},
                             {is_private: true},
                         ]
                     },
@@ -53,7 +58,7 @@ router.post('/contacts', VerifyToken, function (req, res) {
                             return res.send(privateChat);
                         //else we create new private then and then send it
                         else{
-                            let newPrivateChat = new Chat({users_id:[currUser._id,req.body.user_id],is_private: true});
+                            let newPrivateChat = new Chat({users_id:[{user_id: currUser._id},{user_id: req.body.user_id}],is_private: true});
                             newPrivateChat.save(function (err, newChat) {
                                 if(err) {console.log(err); return res.sendStatus(500);}
                                 return res.send(newChat);

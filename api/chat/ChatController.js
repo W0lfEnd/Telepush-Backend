@@ -7,11 +7,13 @@ var VerifyToken = require(__root + 'middleware/auth/VerifyToken');
 router.use(bodyParser.urlencoded({ extended: true }));
 var User = require('../users/User');
 var Chat = require('./Chat');
+var firebaseAdmin = require('firebase-admin');
 
 //get all chats for current user
 router.get('/', VerifyToken, function (req, res) {
+
     Chat.Model.find(
-        { users_id: global["currentUser"]._id },
+        { "users_id.user_id": global["currentUser"]._id },
         Chat.MainProjection,
         function (err, chats) {
         if(err) {
@@ -40,17 +42,13 @@ router.get('/:id/messages', VerifyToken, function (req, res) {
     if(!req.body.skip || !req.body.count) return res.sendStatus(400);
     let skip = Number(req.body.skip);
     let count = Number(req.body.count);
-    console.log({skip,count});
     Chat.Model.findById(
         req.params.id,
         {
             messages: {$slice: [skip, count] }
         },
         function (err, chat) {
-        if(err) {
-            console.log(err);
-            return res.sendStatus(500);
-        }
+        if(err) {console.log(err);return res.sendStatus(500);}
         if(!chat) return res.sendStatus(404);
         res.send(chat.messages);
     });
@@ -59,20 +57,33 @@ router.get('/:id/messages', VerifyToken, function (req, res) {
 
 //get users from chat
 router.get('/:id/users', VerifyToken, function (req, res) {
-    Chat.Model.findById(
-        req.params.id,
+    // Chat.Model.findById(
+    //     req.params.id,
+    //     {
+    //         _id:1,
+    //         users_id: 1
+    //     },
+    //     function (err, chat) {
+    //         if(err) {
+    //             console.log(err);
+    //             return res.sendStatus(500);
+    //         }
+    //         if(!chat) return res.sendStatus(404);
+    //         res.send(chat.users_id);
+    //     });
+    Chat.Model.aggregate([
         {
-            _id:1,
-            users_id: 1
-        },
-        function (err, chat) {
-            if(err) {
-                console.log(err);
-                return res.sendStatus(500);
+            $lookup: {
+                "from": "users",
+                "localField": "users_id",
+                "foreignField": "_id",
+                "as": "users"
             }
-            if(!chat) return res.sendStatus(404);
-            res.send(chat.users_id);
-        });
+        },
+    ], function (err, result) {
+        if(err) {console.log(err);return res.sendStatus(500);}
+        res.send(result);
+    })
 });
 
 
@@ -98,22 +109,49 @@ router.get('/:id/messages/:date', VerifyToken, function (req, res) {
 //send message to chat
 router.post('/:id/send', VerifyToken, function (req, res) {
     if(!req.body.message) return res.sendStatus(400);
-    Chat.Model.findById(req.params.id,{},function (err, doc) {
+    Chat.Model.findById(req.params.id,{},function (err, chatForSending) {
         if(err) {
             console.log(err);
             return res.sendStatus(500);
         }
-        if(!doc.users_id.includes(global["currentUser"]._id)) return res.sendStatus(403);
-        Chat.Model.findOneAndUpdate(
-            req.params.id,
-            {$addToSet: { messages: req.body.message}},
-            function (err, chat) {
-                if(err) {
-                    console.log(err);
-                    return res.sendStatus(500);
+        let users_id = chatForSending.users_id.map(function (element) {
+            return element.user_id;
+        });
+        if(!users_id.includes(global["currentUser"]._id)) return res.sendStatus(403);
+        let newMessage = {
+            sender_id: global["currentUser"]._id,
+            message_text: req.body.message
+        };
+        chatForSending.messages.push(newMessage);
+        chatForSending.save(function (err, success) {
+            if(err) {console.log(err);return res.sendStatus(500);}
+            User.Model.find({_id: {$in: chatForSending.users_id}},{}, function (err, users) {
+                let sendingTokens = [];
+                users.forEach(function (element) {
+                    if(element.users_id)
+                        sendingTokens = sendingTokens.concat(element.users_id);
+                });
+                if(sendingTokens.length > 0){
+                    firebaseAdmin.messaging().sendToDevice(
+                        sendingTokens,
+                        {
+                            data: {
+                                sender_id: global["currentUser"]._id,
+                                sender_name: global["currentUser"].name,
+                                sender_email: global["currentUser"].email,
+                                message: req.body.message
+                            }
+                        },
+                        {
+                            timeToLive: 60 * 60 * 24,
+                            priority: "high"
+                        }
+                    );
                 }
-                res.sendStatus(200);
+
             });
+            res.sendStatus(200);
+        });
     })
 });
 
